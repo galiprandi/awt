@@ -18,7 +18,7 @@ wellcome() {
     echo -e "   │                                                               │"
     echo -e "   │            🥚 ${color}EGG${nc} Automation Workflow Task                    │"
     echo -e "   │                                                               │"
-    echo -e "   │ v1.0.0                                    by Germán Aliprandi │"
+    echo -e "   │ v2.0.0                                    by Germán Aliprandi │"
     echo -e "   ╰───────────────────────────────────────────────────────────────╯"
     echo -e ""
 }
@@ -42,7 +42,9 @@ inp_type() {
         echo -e "   7. ${color}test${nc}:     Adding missing or correcting existing tests"
         echo -e "   8. ${color}chore${nc}:    Changes to the build process or auxiliary tools, libraries or documentation"
         echo -e "   "
-        echo -e "   0. ${color}Exit${nc}:     Exit now!"
+        echo -e "   A. ${color}Advanced${nc}:        Show advanced options"
+        echo -e "   "
+        echo -e "   0. ${color}Exit${nc}:     Exit now !"
         echo ""
         read -p "   Select a task type: " type
         case $type in
@@ -76,6 +78,10 @@ inp_type() {
             ;;
         [8]*)
             type="chore"
+            break
+            ;;
+        "a" | "A")
+            advanced_options
             break
             ;;
         [0]*)
@@ -166,12 +172,60 @@ performing_task() {
     update_changelog
 }
 
-wellcome
+main() {
+    wellcome
+    inp_type
+    inp_task
+    inp_title
+    inp_branch
+    create_vars
+    confirm
+    performing_task
 
-inp_type
-inp_task
-inp_title
-inp_branch
-create_vars
-confirm
-performing_task
+}
+
+advanced_menu() {
+    wellcome
+    while :; do
+        echo -e "                      ${color}*** ADVANCED OPTIONS ***${nc}"
+        echo -e ""
+        echo -e "   1. ${color}Release${nc}: Create a new release"
+        echo -e ""
+        echo -e "   X. Back to main menu"
+        echo -e ""
+        echo -e "   0. ${color}Exit${nc}:     Exit now !"
+        echo -e ""
+        echo -e ""
+
+        read -p "Choice a action: " adv_option
+        case $adv_option in
+        [1]*)
+            adv_create_release
+            break
+            ;;
+        "x" | "X")
+            main
+            break
+            ;;
+        [0]*)
+            abort
+            ;;
+        *)
+            clear
+            advanced_menu
+            ;;
+        esac
+
+    done
+}
+
+advanced_options() {
+    advanced_menu
+}
+
+adv_create_release() {
+    echo "Creating a new release"
+    exit 1
+}
+
+main
