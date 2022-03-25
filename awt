@@ -1,0 +1,177 @@
+#!/bin/bash
+date=$(date '+%Y-%m-%d_%H:%M:%S')
+color='\033[1;93m'
+user_name=$(git config --get user.name)
+user_email=$(git config --get user.email)
+line="───────────────────────────────────────────────"
+line_up="╭───────────────────────────────────────────────────────────────╮"
+line_dw="╰───────────────────────────────────────────────────────────────╯"
+no_title="Untitled task"
+latestTag=$(git describe --tags)
+
+nc='\033[0m'
+# clear
+
+wellcome() {
+    clear
+    echo -e "   ╭───────────────────────────────────────────────────────────────╮"
+    echo -e "   │                                                               │"
+    echo -e "   │            🥚 ${color}EGG${nc} Automation Workflow Task                    │"
+    echo -e "   │                                                               │"
+    echo -e "   │ v1.0.0                                    by Germán Aliprandi │"
+    echo -e "   ╰───────────────────────────────────────────────────────────────╯"
+    echo -e ""
+}
+
+abort() {
+    clear
+    echo ""
+    echo "  You have aborted this mission. See ya in the cyberspace !"
+    echo ""
+    exit 1
+}
+
+inp_type() {
+    while true; do
+        echo -e "   1. ${color}feat${nc}:     A new feature"
+        echo -e "   2. ${color}fix${nc}:      A bug fix"
+        echo -e "   3. ${color}docs${nc}:     Documentation only changes"
+        echo -e "   4. ${color}style${nc}:    Changes that do not affect the meaning of the code (formatting, semi-colons, etc)"
+        echo -e "   5. ${color}refactor${nc}: A code change that neither fixes a bug nor adds a feature"
+        echo -e "   6. ${color}perf${nc}:     A code change that improves performance"
+        echo -e "   7. ${color}test${nc}:     Adding missing or correcting existing tests"
+        echo -e "   8. ${color}chore${nc}:    Changes to the build process or auxiliary tools, libraries or documentation"
+        echo -e "   "
+        echo -e "   0. ${color}Exit${nc}:     Exit now!"
+        echo ""
+        read -p "   Select a task type: " type
+        case $type in
+        [1]*)
+            type="feat"
+            break
+            ;;
+        [2]*)
+            type="fix"
+            break
+            ;;
+        [3]*)
+            type="docs"
+            break
+            ;;
+        [4]*)
+            type="style"
+            break
+            ;;
+        [5]*)
+            type="refactor"
+            break
+            ;;
+        [6]*)
+            type="perf"
+            break
+            ;;
+        [7]*)
+            type="test"
+            break
+            ;;
+        [8]*)
+            type="chore"
+            break
+            ;;
+        [0]*)
+            abort
+            ;;
+        *)
+            clear
+            wellcome
+            ;;
+        esac
+    done
+}
+
+inp_task() {
+    echo ""
+    read -p "   ClickUp Task ID [none]: " ticket
+    ticket=${ticket:-none}
+    ticket=${ticket//#/}
+}
+
+inp_title() {
+    echo ""
+    read -p "   Task Title: " title
+    title=${title:-$no_title}
+    title=${title^}
+}
+
+inp_branch() {
+    branch_sug=${title// /-}
+    branch_sug=${branch_sug,,}
+    echo ""
+    read -p "   Branch name [$branch_sug]: " branch_res
+    branch_res=${branch_res:-$branch_sug}
+    branch_res=${branch_res// /-}
+    branch_res=${branch_res,,}
+}
+
+create_vars() {
+    mr_desc="[$title](https://app.clickup.com/t/$ticket)"
+    mr_title="Draft: $type: $title"
+    if [[ $ticket == 'none' ]]; then
+        mr_desc=$title
+    fi
+    branch="$type/#$ticket/$branch_res"
+    ch_entry="- [**${type^}**: $title](https://app.clickup.com/t/$ticket)"
+}
+
+update_changelog() {
+    sed -i "/## UnReleased/a $ch_entry" CHANGELOG.md
+}
+
+confirm() {
+    clear
+    echo $line_up
+    echo -e "│            ${color}Do you ready to perform this tasks?${nc}                │"
+    echo $line_dw
+    echo ""
+    echo "   1) - Pull latest develop branch changes"
+    echo "   2) - Create a new branch '$branch'"
+    echo "   3) - Add empty commit *required"
+    echo "   4) - Create MR from the new branch with title '$mr_title'"
+    echo "   5) - Add description to new MR '$mr_desc'"
+    echo "   6) - Update CHANGELOG.md with task type and desciption"
+    echo ""
+
+    read -p "Do you wish to continue? [y/N]: " confirm
+    confirm=${confirm:-N}
+    if [ $confirm != "y" ]; then
+        abort
+    fi
+}
+
+performing_task() {
+    echo ""
+    echo "Perfoming task, please wait..."
+    git checkout develop
+    git pull origin develop
+    git checkout -b $branch
+    git push --set-upstream origin $branch
+    git commit --allow-empty -m "$date | $mr_title | #${ticket}[DOING]"
+    git push \
+        -o merge_request.create \
+        -o merge_request.target="develop" \
+        -o merge_request.title="$mr_title" \
+        -o merge_request.description="$mr_desc" \
+        -o merge_request.label="$type" \
+        -o merge_request.remove_source_branch
+    update_changelog
+}
+
+wellcome
+
+inp_type
+inp_task
+inp_title
+inp_branch
+create_vars
+confirm
+performing_task
