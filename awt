@@ -33,20 +33,20 @@ abort() {
 
 inp_type() {
     while true; do
-        echo -e "   1. ${color}feat${nc}:     A new feature"
-        echo -e "   2. ${color}fix${nc}:      A bug fix"
-        echo -e "   3. ${color}docs${nc}:     Documentation only changes"
-        echo -e "   4. ${color}style${nc}:    Changes that do not affect the meaning of the code (formatting, semi-colons, etc)"
-        echo -e "   5. ${color}refactor${nc}: A code change that neither fixes a bug nor adds a feature"
-        echo -e "   6. ${color}perf${nc}:     A code change that improves performance"
-        echo -e "   7. ${color}test${nc}:     Adding missing or correcting existing tests"
-        echo -e "   8. ${color}chore${nc}:    Changes to the build process or auxiliary tools, libraries or documentation"
-        echo -e "   "
-        echo -e "   A. ${color}Advanced${nc}:        Show advanced options"
-        echo -e "   "
-        echo -e "   0. ${color}Exit${nc}:     Exit now !"
+        echo -e "    1. ${color}feat${nc}:     A new feature"
+        echo -e "    2. ${color}fix${nc}:      A bug fix"
+        echo -e "    3. ${color}docs${nc}:     Documentation only changes"
+        echo -e "    4. ${color}style${nc}:    Changes that do not affect the meaning of the code (formatting, semi-colons, etc)"
+        echo -e "    5. ${color}refactor${nc}: A code change that neither fixes a bug nor adds a feature"
+        echo -e "    6. ${color}perf${nc}:     A code change that improves performance"
+        echo -e "    7. ${color}test${nc}:     Adding missing or correcting existing tests"
+        echo -e "    8. ${color}chore${nc}:    Changes to the build process or auxiliary tools, libraries or documentation"
+        echo -e "    "
+        echo -e "    A. ${color}Advanced${nc}:        Show advanced options"
+        echo -e "    "
+        echo -e "    0. ${color}Exit${nc}:     Exit now !"
         echo ""
-        read -p "   Select a task type: " type
+        read -p "    Select a task type: " type
         case $type in
         [1]*)
             type="feat"
@@ -93,18 +93,22 @@ inp_type() {
             ;;
         esac
     done
+    wellcome
+    echo -e "    ${color}Creating a new task:${nc}"
+    echo -e ""
+    echo "    - Task type: $type"
 }
 
 inp_task() {
     echo ""
-    read -p "   ClickUp Task ID [none]: " ticket
+    read -p "    - ClickUp task ID [none]: " ticket
     ticket=${ticket:-none}
     ticket=${ticket//#/}
 }
 
 inp_title() {
     echo ""
-    read -p "   Task Title: " title
+    read -p "    - Task title: " title
     title=${title:-$no_title}
     title=${title^}
 }
@@ -113,7 +117,7 @@ inp_branch() {
     branch_sug=${title// /-}
     branch_sug=${branch_sug,,}
     echo ""
-    read -p "   Branch name [$branch_sug]: " branch_res
+    read -p "    - Branch name [$branch_sug]: " branch_res
     branch_res=${branch_res:-$branch_sug}
     branch_res=${branch_res// /-}
     branch_res=${branch_res,,}
@@ -135,19 +139,20 @@ update_changelog() {
 
 confirm() {
     clear
-    echo $line_up
-    echo -e "│            ${color}Do you ready to perform this tasks?${nc}                │"
-    echo $line_dw
+    wellcome
+    echo -e "    ${color}Do you ready to perform this tasks ?${nc}"
     echo ""
-    echo "   1) - Pull latest develop branch changes"
-    echo "   2) - Create a new branch '$branch'"
-    echo "   3) - Add empty commit *required"
-    echo "   4) - Create MR from the new branch with title '$mr_title'"
-    echo "   5) - Add description to new MR '$mr_desc'"
-    echo "   6) - Update CHANGELOG.md with task type and desciption"
+    echo "    1) - Switch to develop branch"
+    echo "    2) - Pull latest develop branch changes"
+    echo "    3) - Create a new branch '$branch'"
+    echo "    4) - Add empty commit *required"
+    echo "    5) - Create MR from the new branch with title '$mr_title'"
+    echo "    6) - Add description to new MR '$mr_desc'"
+    echo "    7) - Link ClickUp tick with MR and branch"
+    echo "    8) - Update CHANGELOG.md with task type and desciption"
     echo ""
 
-    read -p "Do you wish to continue? [y/N]: " confirm
+    read -p "   Do you wish to continue? [y/N]: " confirm
     confirm=${confirm:-N}
     if [ $confirm != "y" ]; then
         abort
@@ -224,8 +229,89 @@ advanced_options() {
 }
 
 adv_create_release() {
-    echo "Creating a new release"
+    wellcome
+    echo -e "    Advance options > ${color}Create a new release${nc}"
+    echo -e ""
+    adv_cr_inp_release_values
+
+    adv_cr_summary
     exit 1
+}
+
+adv_cr_inp_release_values() {
+    release_sug=$(date +v%Y%m%d_%H%M)
+    read -p "    Release name [$release_sug]: " release_res
+    release_res=${release_res:-$release_sug}
+    release_res=${release_res// /-}
+    release_res=${release_res,,}
+    echo ""
+    read -p "    Branch source [develop]: " branch_source
+    branch_source=${branch_source:-develop}
+    echo ""
+    read -p "    Branch target [staging]: " branch_target
+    branch_target=${branch_target:-staging}
+    mr_title="Release $release_res into $branch_target"
+}
+
+adv_cr_update_changelog() {
+    file="CHANGELOG.md"
+    tag="## UnReleased"
+    if test -f "./$FILE"; then
+        release_res="v00000000"
+        new_lines="$tag\n\n## $release_res"
+        if grep -Fxq "$tag" $file; then
+            sed -i "s/$tag/$new_lines/i" $file
+
+        else
+            sed -i "1s/^/$tag\n\n/i" $file
+        fi
+
+    else
+        echo $tag >"./$file"
+    fi
+
+}
+
+adv_cre_performing_task() {
+    clear
+    wellcome
+    git switch develop
+    git pull origin develop
+    git switch -c $release_res
+    git push --set-upstream origin $release_res
+    git commit --allow-empty -m "$title"
+    git push \
+        -o merge_request.create \
+        -o merge_request.target="$branch_target" \
+        -o merge_request.title="$mr_title" \
+        -o merge_request.description="Power by awt script." \
+        -o merge_request.remove_source_branch
+    adv_cr_update_changelog
+    git add ./CHANGELOG.md
+    git commit -m "Update CHANGELOG.md"
+    git push
+}
+
+adv_cr_summary() {
+    clear
+    wellcome
+    echo -e "    ${color}Do you ready to perform this tasks ?${nc}"
+    echo -e ""
+    echo -e "    1) - Switch to '$branch_source' branch"
+    echo -e "    2) - Pull latest develop '$branch_source' changes"
+    echo -e "    3) - Create a release branch '$release_res' from '$branch_source' branch"
+    echo -e "    4) - Create a MR from ${color}$release_res into $branch_target${nc} with title '$mr_title'"
+    echo -e "    5) - Update and commit CHANGELOG.md with new release name"
+    echo -e ""
+
+    read -p "    Do you wish to continue? [y/N]: " confirm
+    confirm=${confirm:-N}
+    if [ $confirm != "y" ]; then
+        abort
+    else
+        adv_cre_performing_task
+    fi
+
 }
 
 main
