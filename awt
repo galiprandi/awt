@@ -1,5 +1,7 @@
 #!/bin/bash
+file="CHANGELOG.md"
 sp="   "
+firm="\n\nPower by [awt script](https://github.com/galiprandi/awt)."
 date=$(date '+%Y-%m-%d_%H:%M:%S')
 color='\033[1;93m'
 user_name=$(git config --get user.name)
@@ -8,7 +10,7 @@ line="────────────────────────�
 line_up="╭───────────────────────────────────────────────────────────────╮"
 line_dw="╰───────────────────────────────────────────────────────────────╯"
 no_title="Untitled task"
-latestTag=$(git describe --tags)
+last_tag=$(git describe --tags)
 
 nc='\033[0m'
 # clear
@@ -178,7 +180,7 @@ performing_task() {
         -o merge_request.create \
         -o merge_request.target="develop" \
         -o merge_request.title="$mr_title" \
-        -o merge_request.description="$mr_desc" \
+        -o merge_request.description="$mr_desc $firm" \
         -o merge_request.label="$type" \
         -o merge_request.remove_source_branch
     update_changelog
@@ -209,7 +211,10 @@ advanced_menu() {
         echo -e ""
         echo -e ""
 
-        read -p "$sp Choice a action: " adv_option
+        adv_option_default="1"
+        read -p "$sp Choice a action: [1]: " adv_option
+        adv_option=${adv_option:-$adv_option_default}
+
         case $adv_option in
         [1]*)
             adv_create_release
@@ -240,73 +245,80 @@ adv_create_release() {
     echo -e "$sp ${color}Create a new release${nc}"
     echo -e ""
     adv_cr_inp_release_values
-
+    adv_cr_new_tickets_status
     adv_cr_summary
     exit 1
 }
 
 adv_cr_inp_release_values() {
-    release_sug=$(date +v%Y%m%d_%H%M)
-    read -p "$sp Release name [$release_sug]: " release_res
-    release_res=${release_res:-$release_sug}
-    release_res=${release_res// /-}
-    release_res=${release_res,,}
     echo ""
-    read -p "$sp Branch source [develop]: " branch_source
-    branch_source=${branch_source:-develop}
+    release_default=$(date +v%Y%m%d_%H%M)
+    read -p "$sp Release name [$release_default]: " release
+    release=${release:-$release_default}
+    release=${release// /-}
+    release=${release,,}
+
     echo ""
-    read -p "$sp Branch target [staging]: " branch_target
-    branch_target=${branch_target:-staging}
-    mr_title="Release $release_res into $branch_target"
+    branch_source_default="develop"
+    read -p "$sp Branch source [$branch_source_default]: " branch_source
+    branch_source=${branch_source:-$branch_source_default}
+
+    echo ""
+    branch_target_default="staging"
+    read -p "$sp Branch target [$branch_target_default]: " branch_target
+    branch_target=${branch_target:-$branch_target_default}
+    mr_title="Release $release into $branch_target"
+
+    echo ""
+    new_tickets_status_default="QA"
+    read -p "$sp Move tickets to [$new_tickets_status_default]: " new_tickets_status
+    new_tickets_status=${tickets_status:-$new_tickets_status_default}
 }
 
 adv_cr_update_changelog() {
-    file="CHANGELOG.md"
     tag="## UnReleased"
-    if test -f "./$FILE"; then
-        new_lines="$tag\n\n## $release_res"
+    if test -f "./$file"; then
+        new_lines="$tag\n\n## Release $release"
+
         if grep -Fxq "$tag" $file; then
             sed -i "s/$tag/$new_lines/i" $file
-
         else
             sed -i "1s/^/$tag\n\n/i" $file
         fi
-
     else
         echo $tag >"./$file"
     fi
 
 }
 
-adv_cre_performing_task() {
-    echo ""
-    echo "$sp Perfoming task, please wait..."
-    git switch develop
-    git pull origin develop
-    git switch -c $release_res
-    git push --set-upstream origin $release_res
-    git commit --allow-empty -m "$title"
-    git push \
-        -o merge_request.create \
-        -o merge_request.target="$branch_target" \
-        -o merge_request.title="$mr_title" \
-        -o merge_request.description="Power by awt script." \
-        -o merge_request.remove_source_branch
-    adv_cr_update_changelog
-    git add ./CHANGELOG.md
-    git commit -m "Update CHANGELOG.md"
-    git push
+adv_cr_new_tickets_status() {
+    if test -f "./$file"; then
+        tickets="Tickets moved to $new_tickets_status:\n"
+        start="## UnReleased"
+        end="## Release"
+        lines=$(sed -n "/$start/,/$end/{ /$start/! {/$end/! p } }" $file)
+        tickets_id=$(sed -e 's/\(^.*\/t\/\)\(.*\)\().*$\)/\2/' <<<"$lines")
+        task_titles=$(sed -e 's/\(^.*\[\)\(.*\)\(].*$\)/\2/' <<<"$lines")
+        array_id=($tickets_id)
+        array_titles=($task_titles)
+        final=""
+        i=0
+        for ticket in "${array_id[@]}"; do
+            tickets="$tickets\n#$ticket[$new_tickets_status]"
+        done
+    else
+        tickets="No tickets moved, $file not found."
+    fi
 }
 
 adv_cr_summary() {
-    clear
     wellcome
     echo -e "$sp ${color}Do you ready to perform this tasks ?${nc}"
     echo -e ""
     echo -e "$sp 1) - Switch to '$branch_source' branch"
     echo -e "$sp 2) - Pull latest '$branch_source' changes"
-    echo -e "$sp 3) - Create a release branch '$release_res' from '$branch_source'"
-    echo -e "$sp 4) - Create a MR from '${color}$release_res into $branch_target${nc}' with title '$mr_title'"
+    echo -e "$sp 3) - Create a release branch '$release' from '$branch_source'"
+    echo -e "$sp 4) - Create a MR from '${color}$release into $branch_target${nc}' with title '$mr_title'"
     echo -e "$sp 5) - Update and commit CHANGELOG.md"
     echo -e ""
 
@@ -319,7 +331,33 @@ adv_cr_summary() {
         abort
         ;;
     esac
-
 }
 
-main
+adv_cre_performing_task() {
+    # echo "$mr_title $release $branch_source > $branch_target $title $tickets $firm $file"
+
+    echo ""
+    echo "$sp Perfoming task, please wait..."
+    git switch $branch_source
+    git pull origin $branch_source
+    git switch -c $release
+    git push --set-upstream origin $release
+    git commit --allow-empty -m "$title"
+    git push \
+        -o merge_request.create \
+        -o merge_request.target="$branch_target" \
+        -o merge_request.title="$mr_title" \
+        -o merge_request.description="$tickets $firm" \
+        -o merge_request.label="release" \
+        -o merge_request.remove_source_branch
+    adv_cr_update_changelog
+    git add ./$file
+    git commit -m "Update $file"
+    git push
+}
+
+if [ -d .git ]; then
+    main
+else
+    echo -e "${color}This script must be run in a git repository.${nc}"
+fi
