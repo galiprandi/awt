@@ -44,7 +44,7 @@ done
 get_latest_version() {
     local url="https://raw.githubusercontent.com/galiprandi/awt/egg/awt"
     echo ""
-    wget "$url"
+    curl -O "$url"
     echo ""
     echo "Done"
     exit 0
