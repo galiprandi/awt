@@ -40,6 +40,16 @@ done
 
 # =============== UTILITY FUNCTIONS ===============
 
+# Get lasted version
+get_latest_version() {
+    local url="https://raw.githubusercontent.com/galiprandi/awt/egg/awt"
+    echo ""
+    wget "$url"
+    echo ""
+    echo "Done"
+    exit 0
+}
+
 # Add new UnReleased line to changelog
 add_un_released_entry_to_changelog() {
     new_entry="$un_released\n\n$1"
@@ -326,8 +336,8 @@ advanced_menu() {
         echo -e ""
         echo -e ""
         echo -e ""
-        echo -e ""
-        echo -e "$sp 0) ${color}Back${nc} to main menu"
+        echo -e "$sp 0) ${color}Back${nc}: to main menu"
+        echo -e "$sp u) ${color}Update${nc}: Get latest version of this script"
         echo -e "$sp x) ${color}Exit${nc}:     Exit now !"
         echo -e ""
 
@@ -346,6 +356,10 @@ advanced_menu() {
             ;;
         [3]*)
             adv_copy_file_values "staging" "CHANGELOG.md"
+            break
+            ;;
+        [u]*)
+            get_latest_version
             break
             ;;
         [0]*)
