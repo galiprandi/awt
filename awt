@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-version="20221001"
+version="20230405"
 
 file="CHANGELOG.md"
 sp="   "
@@ -21,6 +21,8 @@ un_released="## UnReleased"
 last_tag=$(git describe --tags --always)
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 default_branch_source="develop"
+dev_tracking_app="Jira"
+dev_tracking_app_ticket_link="https://eggcooperation.atlassian.net/browse"
 
 nc='\033[0m'
 
@@ -53,18 +55,8 @@ get_latest_version() {
 # Add new UnReleased line to changelog
 add_un_released_entry_to_changelog() {
     new_entry="$un_released\n\n$1"
-    echo "$new_entry"
-
-    if test -f "./$file"; then
-        if grep -Fxq "$un_released" $file; then
-            sed -i "s/$un_released/$new_entry/i" $file
-        else
-            sed -i "1s/^/$un_released\n\n$new_entry/i" $file
-        fi
-    else
-        echo -e "$un_released\n\n$new_entry" >"./$file"
-    fi
-
+    file_tmp="$file.tmp"
+    echo "$1" >./$file_tmp && cat $file >>$file_tmp && mv $file_tmp $file
 }
 
 # Return tickets ID diff between two branches
@@ -118,12 +110,12 @@ confirm() {
 # The wellcom script
 wellcome() {
     clear
-    echo -e "$sp╭───────────────────────────────────────────────────────────────╮"
-    echo -e "$sp│                                                               │"
-    echo -e "$sp│            🥚 ${color}EGG${nc} Automation Workflow Task                    │"
-    echo -e "$sp│                                                               │"
-    echo -e "$sp│ v$version                                 by Germán Aliprandi │"
-    echo -e "$sp╰───────────────────────────────────────────────────────────────╯"
+    echo -e " $sp ╭───────────────────────────────────────────────────────────────╮"
+    echo -e " $sp │                                                               │"
+    echo -e " $sp │            🥚 ${color}EGG${nc} Automation Workflow Task                    │"
+    echo -e " $sp │                                                               │"
+    echo -e " $sp │ v$version                                 by Germán Aliprandi │"
+    echo -e " $sp ╰───────────────────────────────────────────────────────────────╯"
     echo -e ""
 }
 
@@ -200,7 +192,7 @@ ct_get_task_type() {
         esac
     done
     wellcome
-    echo -e "$sp${color}Creating a new task:${nc}"
+    echo -e "$sp ${color}Creating a new task:${nc}"
     echo -e ""
     echo "$sp- Task type: $type"
 }
@@ -209,7 +201,7 @@ ct_get_task_type() {
 ct_get_required_data() {
     # Get ticket ID
     echo ""
-    read -p "$sp- ClickUp task ID [none]: " ticket
+    read -p "$sp- $dev_tracking_app ID [none]: " ticket
     ticket=${ticket:-none}
     ticket=${ticket//#/}
 
@@ -217,16 +209,16 @@ ct_get_required_data() {
     echo ""
     read -p "$sp- Task title: " title
     title=${title:-$no_title}
-    title=${title^}
+    title=${title}
 
     # Get branch name
     branch_default=${title// /-}
-    branch_default=${branch_default,,}
+    branch_default=${branch_default}
     echo ""
     read -p "$sp- Branch name [$branch_default]: " branch_name
     branch_name=${branch_name:-$branch_default}
     branch_name=${branch_name// /-}
-    branch_name=${branch_name,,}
+    branch_name=${branch_name}
 
     # Create required vars
 }
@@ -243,27 +235,27 @@ copy_file_from_branch() {
 }
 
 ct_create_vars() {
-    mr_desc="[$title](https://app.clickup.com/t/$ticket)"
+    mr_desc="[$title]($dev_tracking_app_ticket_link/$ticket)"
     mr_title="$type: $title"
     if [[ $ticket == 'none' ]]; then
         mr_desc=$title
     fi
-    branch="$type/#$ticket/$branch_name"
-    ch_entry="- [**${type^}**: $title](https://app.clickup.com/t/$ticket)"
+    branch="$ticket/$type/$branch_name"
+    ch_entry="- [**${type}**: $title]($dev_tracking_app_ticket_link/$ticket)"
 }
 
 ct_task_summary() {
     clear
     wellcome
-    echo -e "$sp ${color}Do you ready to perform this tasks ?${nc}"
+    echo -e "$sp ${color}Are you prepared to execute the following tasks?${nc}"
     echo ""
     echo "$sp 1) - Switch to $default_branch_source branch"
-    echo "$sp 2) - Pull latest $default_branch_source branch changes"
-    echo "$sp 3) - Create a new branch '$branch'"
-    echo "$sp 4) - Add empty commit required by ClickUp"
-    echo "$sp 5) - Create a draft MR from '$branch' with title '$mr_title'"
-    echo "$sp 6) - Link ClickUp tick with MR and new branch"
-    echo "$sp 7) - Update $file with the task, type and desciption"
+    echo "$sp 2) - Pull the latest changes from the $default_branch_source branch"
+    echo "$sp 3) - Create a new branch named '$branch'"
+    echo "$sp 4) - Add an empty commit as required by $dev_tracking_app"
+    echo "$sp 5) - Create a Draft Merge Request from '$branch' with title '$mr_title'"
+    echo "$sp 6) - Link $dev_tracking_app ticket with Merge Request and new branch"
+    echo "$sp 7) - Update $file with link to the ticket"
     echo ""
 
     question=$(confirm)
@@ -272,7 +264,6 @@ ct_task_summary() {
     else
         abort
     fi
-
 }
 
 ct_performing_tasks() {
@@ -287,24 +278,26 @@ ct_performing_tasks() {
     git push --set-upstream origin $branch
 
     # Add entry to changelog
-    new_entry="- [**${type^}**: $title](https:\/\/app.clickup.com\/t\/$ticket)"
+    new_entry="- [${type}: $title]($dev_tracking_app_ticket_link/$ticket)"
     add_un_released_entry_to_changelog "$new_entry"
     git add "./$file"
-    git commit -m "Task entry on $file"
+    git commit -m "docs: updating $file for $dev_tracking_app ticket $ticket"
     git push origin $branch
 
     # Move ticket to Doing status
-    git commit --allow-empty -m "$mr_title | #${ticket}[DOING]"
+    git commit --allow-empty -m "chore: $ticket $title" -m "$dev_tracking_app_ticket_link/$ticket"
 
     # Create MR
     mr_response=$(
         git push \
             -o merge_request.create \
             -o merge_request.draft \
+            -o merge_request.remove_source_branch \
             -o merge_request.target="$default_branch_source" \
             -o merge_request.title="$mr_title" \
             -o merge_request.description="$mr_desc $firm" \
             -o merge_request.label="$type" \
+            -o merge_request.label="$ticket" \
             2>&1
     )
 
@@ -562,13 +555,13 @@ adv_cre_performing_task() {
     # Update changelog
     adv_cr_update_changelog
     git add .
-    git commit -m "Update $file"
+    git commit -m "docs: update $file"
     git push origin $branch_source
 
     git checkout -b $release $branch_source
     git push --set-upstream origin $release
 
-    git commit --allow-empty -m "$tickets"
+    git commit --allow-empty -m "chore: $tickets"
 
     echo ""
     echo -e "Creating MR: $mr_title"
@@ -615,8 +608,6 @@ get_tickets_from_release() {
 
 if [ -d .git ]; then
     main
-    # get_tickets_from_release
-
 else
 
     clear
